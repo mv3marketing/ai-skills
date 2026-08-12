@@ -1,0 +1,41 @@
+{
+  "_note": "ILLUSTRATIVE EXAMPLE ONLY. server_id, priority, and rate_limit values below are placeholders for demonstrating route() — they are NOT verified real rate limits for Outreach.io, Salesloft, or Apollo.io. Always pull your account's actual plan limits from the vendor's own API docs before using this in production.",
+  "manifests": [
+    {
+      "server_id": "outreach-prod-1",
+      "platform": "Outreach.io",
+      "status": "connected",
+      "priority": 0,
+      "capabilities": [
+        { "name": "sequence.add", "required_scope": "write" },
+        { "name": "contact.enrich", "required_scope": "read" },
+        { "name": "prospect.delete", "required_scope": "destructive" }
+      ],
+      "rate_limit": { "window_seconds": 60, "max_calls": 100 },
+      "usage_this_window": 98
+    },
+    {
+      "server_id": "salesloft-prod-1",
+      "platform": "Salesloft",
+      "status": "connected",
+      "priority": 1,
+      "capabilities": [
+        { "name": "sequence.add", "required_scope": "write" },
+        { "name": "contact.enrich", "required_scope": "read" }
+      ],
+      "rate_limit": { "window_seconds": 60, "max_calls": 200 },
+      "usage_this_window": 12
+    },
+    {
+      "server_id": "apollo-prod-1",
+      "platform": "Apollo.io",
+      "status": "degraded",
+      "priority": 2,
+      "capabilities": [
+        { "name": "contact.enrich", "required_scope": "read" }
+      ],
+      "rate_limit": { "window_seconds": 60, "max_calls": 50 },
+      "usage_this_window": 5
+    }
+  ]
+}
