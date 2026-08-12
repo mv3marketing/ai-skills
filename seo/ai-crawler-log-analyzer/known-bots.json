@@ -1,0 +1,20 @@
+{
+  "_source": "Compiled from each vendor's own published crawler documentation, cross-checked 2026-08-12. User-agent substrings change over time as vendors add new crawlers; verify against the vendor's current docs before relying on this list for a compliance decision.",
+  "_last_verified": "2026-08-12",
+  "bots": [
+    { "name": "GPTBot", "vendor": "OpenAI", "purpose": "Training-data crawler", "ua_substring": "GPTBot" },
+    { "name": "ChatGPT-User", "vendor": "OpenAI", "purpose": "Live browsing triggered by a ChatGPT user action", "ua_substring": "ChatGPT-User" },
+    { "name": "OAI-SearchBot", "vendor": "OpenAI", "purpose": "SearchGPT indexing", "ua_substring": "OAI-SearchBot" },
+    { "name": "ClaudeBot", "vendor": "Anthropic", "purpose": "Training-data / retrieval crawler", "ua_substring": "ClaudeBot" },
+    { "name": "anthropic-ai", "vendor": "Anthropic", "purpose": "Older Anthropic crawler identifier", "ua_substring": "anthropic-ai" },
+    { "name": "Claude-Web", "vendor": "Anthropic", "purpose": "Older Anthropic web-browsing identifier", "ua_substring": "Claude-Web" },
+    { "name": "PerplexityBot", "vendor": "Perplexity", "purpose": "Answer-engine crawler", "ua_substring": "PerplexityBot" },
+    { "name": "CCBot", "vendor": "Common Crawl", "purpose": "Open corpus crawler, widely used as a training-data source by many AI labs", "ua_substring": "CCBot" },
+    { "name": "Bytespider", "vendor": "ByteDance", "purpose": "Training-data crawler", "ua_substring": "Bytespider" },
+    { "name": "Amazonbot", "vendor": "Amazon", "purpose": "Alexa / product-answer crawler", "ua_substring": "Amazonbot" },
+    { "name": "Google-Extended", "vendor": "Google", "purpose": "Gemini / AI-features training-data token (crawl traffic often rides on the standard Googlebot UA; this token controls robots.txt opt-out, not necessarily a distinct UA string in logs)", "ua_substring": "Google-Extended" },
+    { "name": "Applebot-Extended", "vendor": "Apple", "purpose": "Apple Intelligence training-data token, same caveat as Google-Extended", "ua_substring": "Applebot-Extended" },
+    { "name": "Meta-ExternalAgent", "vendor": "Meta", "purpose": "Training-data crawler", "ua_substring": "Meta-ExternalAgent" },
+    { "name": "FacebookBot", "vendor": "Meta", "purpose": "Older Meta crawler identifier", "ua_substring": "FacebookBot" }
+  ]
+}
