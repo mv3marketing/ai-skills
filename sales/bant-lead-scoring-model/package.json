@@ -1,0 +1,8 @@
+{
+  "name": "bant-lead-scoring-model",
+  "version": "1.0.0",
+  "description": "Calibrates BANT lead-scoring weights from real closed-deal history",
+  "main": "calibrate.js",
+  "scripts": { "test": "node test.js" },
+  "license": "MIT"
+}
