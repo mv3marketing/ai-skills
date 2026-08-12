@@ -1,0 +1,8 @@
+{
+  "name": "ai-sdr-objection-handler",
+  "version": "1.0.0",
+  "description": "Branching objection-response skill for AI SDR agents",
+  "main": "router.js",
+  "scripts": { "test": "node test.js" },
+  "license": "MIT"
+}

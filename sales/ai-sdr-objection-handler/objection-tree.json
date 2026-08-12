@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "config": {
+    "handoff_channel": "#sales-alerts",
+    "max_price_pushback_rounds": 2,
+    "escalate_on_authority_objection": true,
+    "timing_escalation_threshold_days": 180
+  },
+  "branches": {
+    "price.discount_ask": {
+      "trigger_examples": ["can you do a discount", "is there any flexibility on price", "what if we commit to a year upfront"],
+      "response_strategy": "Acknowledge the ask directly, do not pretend not to understand it. Offer the one real lever available (annual prepay discount, if applicable) once. Do not invent a discount that isn't in the pricing config.",
+      "escalate_after_rounds": 2,
+      "escalate_to": "human_handoff"
+    },
+    "price.competitor_price": {
+      "trigger_examples": ["competitor X is cheaper", "why should I pay more than Y charges"],
+      "response_strategy": "Ask what specifically the competitor's price includes before responding — most competitor comparisons are apples-to-oranges on scope. Never disparage a named competitor by name.",
+      "escalate_after_rounds": 2,
+      "escalate_to": "human_handoff"
+    },
+    "price.budget_freeze": {
+      "trigger_examples": ["we don't have budget right now", "budget got cut this quarter"],
+      "response_strategy": "Ask directly whether this is a timing problem (budget returns later) or a real disqualifier. Route to timing.wrong_quarter if it's the former.",
+      "escalate_after_rounds": 2,
+      "escalate_to": "human_handoff"
+    },
+    "timing.not_now": {
+      "trigger_examples": ["not the right time", "we're slammed right now", "check back later"],
+      "response_strategy": "Ask for a specific re-engagement date rather than accepting a vague 'later.' Log the date and set a real follow-up, don't just drop the lead.",
+      "escalate_if_timeline_days_gt": 180,
+      "escalate_to": "human_handoff"
+    },
+    "timing.wrong_quarter": {
+      "trigger_examples": ["maybe next quarter", "revisit this in Q3", "budget planning happens in the fall"],
+      "response_strategy": "Confirm the specific quarter and what would need to be true for the conversation to restart then. Set a calendar-based follow-up, not a generic nurture drip.",
+      "escalate_if_timeline_days_gt": 180,
+      "escalate_to": "human_handoff"
+    },
+    "authority.not_decision_maker": {
+      "trigger_examples": ["I'd need to check with my boss", "I'm not the one who signs off on this", "let me loop in our VP"],
+      "response_strategy": "Do not keep pitching the non-decision-maker. Ask for a warm intro to the actual decision maker and offer to include a one-paragraph summary they can forward.",
+      "escalate_immediately": true,
+      "escalate_to": "human_handoff"
+    }
+  }
+}
