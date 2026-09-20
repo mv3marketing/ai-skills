@@ -33,7 +33,9 @@ frequency, which increases the number of reposts.
 | File | Purpose |
 |---|---|
 | `availability.js` | `canonicalizeStatus()`, `parseTimestamp()`, `reconcileListings()`, `summarizeByPlatform()`, `buildDelistPlan()` — zero dependencies |
+| `pipeline.js` | `PLATFORM_PROFILES`, `diagnoseIncident()`, `runRootCauseAnalysis()`, `wasScannerUp()` — attributes each stuck listing to a pipeline stage |
 | `test.js` | 40-test suite covering status normalization, timezone rejection, all four root-cause classifications, the repost grace window, per-platform cadence, and plan generation |
+| `test-pipeline.js` | 31-test suite covering stage attribution, scanner-uptime logic, cause precedence, and RCA aggregation |
 
 ## How to use it
 
@@ -71,6 +73,55 @@ source, still buyable elsewhere), `orphan_listing` (live on a platform, absent f
 source — usually item-ID drift after a listing was recreated), and `unlisted_available`
 (in stock but dead on a channel, which is lost sales rather than oversell).
 
+## Stage attribution (`pipeline.js`)
+
+`availability.js` tells you a listing is wrong. `pipeline.js` tells you which stage of
+your cross-listing stack broke, because the fixes do not overlap:
+
+| Stage | What it does | Typical failure |
+|---|---|---|
+| `detect` | Notices the sale on the platform it happened on | The sale landed while the scanner was not running |
+| `dispatch` | Removes the item everywhere else | Quantity > 1, an active offer, an unlinked listing, a dead session |
+| `publish` | Relist/bump jobs rewrite listings from the local catalog | A relister recreates an item that sold |
+
+Two structural facts drive most real-world failures, and both are documented vendor
+behavior rather than bugs:
+
+1. **Detection for marketplace platforms usually runs client-side.** Only API-backed
+   platforms (eBay, Etsy, Shopify) are detected server-side. Poshmark, Depop, Mercari,
+   Whatnot and friends are polled by a browser extension every 10–15 minutes, and only
+   while the computer is on, awake, and the tool's tab is open. A sale that lands while
+   the machine is asleep is usually not detected late — it is never detected, because the
+   scanner reads current state instead of backfilling history.
+2. **Multi-quantity items are decremented, not delisted.** Auto-delist typically removes
+   an item only when the last unit sells. A one-of-one collectible carrying quantity > 1
+   in the catalog will never be taken down automatically on any quantity-aware platform.
+
+```js
+const { runRootCauseAnalysis } = require('./pipeline.js');
+
+const { ranked, stageShare } = runRootCauseAnalysis(
+  [{
+    item: 'Star Wars comic packs',
+    salePlatform: 'poshmark',              // where it actually sold
+    soldAt: '2026-09-19T05:00:00Z',
+    detectedAt: null,                      // the tool never recorded it
+    stuckOn: ['ebay', 'mercari', 'depop'], // still live here
+  }],
+  { uptimeWindows: [{ from: '2026-09-19T13:00:00Z', to: '2026-09-20T00:00:00Z' }] }
+);
+
+// stageShare -> { detect: 100 }
+// ranked[0]  -> detection_missed_offline, with the fix attached
+```
+
+Causes are attributed in precedence order, worst-explanation-first: a repost is blamed on
+the publisher even when detection also failed (the relister ran regardless), an undetected
+sale outranks every dispatch-side cause (nothing downstream could have run), and an
+unlinked listing outranks quantity and offer blocks (the tool cannot delist what it does
+not know it owns). `runRootCauseAnalysis()` rolls a batch of incidents up into a ranked
+table with each cause's share of the damage.
+
 ## The two real guardrails
 
 1. **Unknown statuses fail closed.** Every platform has its own vocabulary — `active`,
@@ -102,3 +153,8 @@ so a row disappearing from your feed is not the same as the listing coming down.
 
 Free to download and run yourself. MV3 charges $175/hr only for implementation help
 wiring this into your real platforms' listing export and delist APIs.
+
+`PLATFORM_PROFILES` encodes per-platform detection transport, poll interval, delist
+action, and whether the platform refuses to delete a listing with a live offer. Vendors
+change this behavior — override any entry via the `profiles` option rather than trusting
+the defaults indefinitely.

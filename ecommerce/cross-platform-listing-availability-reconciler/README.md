@@ -15,7 +15,17 @@ summarizeByPlatform(findings); // per-platform likelyCause
 buildDelistPlan(findings);     // per-platform actions, worst-first
 ```
 
-See `SKILL.md` for the full write-up. Run `node test.js` — 40/40 passing.
+`pipeline.js` goes one level deeper and attributes each stuck listing to the stage that
+broke — `detect` (the sale was never noticed), `dispatch` (quantity > 1, an active offer,
+an unlinked listing) or `publish` (a relister recreated a sold item):
+
+```js
+const { runRootCauseAnalysis } = require('./pipeline.js');
+const { ranked, stageShare } = runRootCauseAnalysis(incidents, { uptimeWindows });
+```
+
+See `SKILL.md` for the full write-up. Run `node test.js` — 40/40 passing — and
+`node test-pipeline.js` — 31/31 passing.
 
 ## License
 
