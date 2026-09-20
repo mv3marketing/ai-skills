@@ -34,7 +34,7 @@ frequency, which increases the number of reposts.
 |---|---|
 | `availability.js` | `canonicalizeStatus()`, `parseTimestamp()`, `reconcileListings()`, `summarizeByPlatform()`, `buildDelistPlan()` — zero dependencies |
 | `pipeline.js` | `PLATFORM_PROFILES`, `diagnoseIncident()`, `runRootCauseAnalysis()`, `wasScannerUp()` — attributes each stuck listing to a pipeline stage |
-| `test.js` | 40-test suite covering status normalization, timezone rejection, all four root-cause classifications, the repost grace window, per-platform cadence, and plan generation |
+| `test.js` | 45-test suite covering status normalization, timezone rejection, all four root-cause classifications, the repost grace window, per-platform cadence, source-quantity overrides, and plan generation |
 | `test-pipeline.js` | 31-test suite covering stage attribution, scanner-uptime logic, cause precedence, and RCA aggregation |
 
 ## How to use it
@@ -139,6 +139,21 @@ table with each cause's share of the damage.
    throws on anything ambiguous rather than assuming UTC. A `repostGraceMinutes` window
    (default 5) keeps a write that raced the sale by a few seconds from being reported as
    a republishing bug.
+
+### Quantity beats the status word
+
+An inventory record may carry an optional `quantity`, and when it disagrees with the
+status word, quantity wins. This is not hypothetical: eBay's Out-of-Stock Control keeps a
+fixed-price listing **active** at quantity 0 and merely hides it from search, so a source
+of truth read by status alone records a sold-out item as available — in the one record
+every other platform keys off. `reconcileListings()` rewrites that to `sold` and reports
+`sourceQuantityOverride: 'zero_quantity_still_active'` so the override is visible rather
+than silent.
+
+The same field matters in the other direction. Most cross-listers delist other platforms
+only when the **last** unit sells; above that they decrement. A one-of-one item carrying
+quantity > 1 therefore never triggers a delist anywhere. `sourceQuantity` is surfaced on
+every finding so a stuck listing can be attributed to catalog quantity rather than to sync.
 
 ## Calibrating it
 

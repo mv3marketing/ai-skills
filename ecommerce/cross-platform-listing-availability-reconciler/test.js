@@ -407,4 +407,61 @@ test('an empty findings array produces an empty plan and an empty summary', () =
   assert.deepStrictEqual(summarizeByPlatform([]), {});
 });
 
-console.log(`\n${passed}/40 passing`);
+
+
+// --- source-of-truth quantity (appended: eBay Out-of-Stock Control trap) ---
+test('quantity 0 overrides an "active" source status, because the listing can stay active at zero', () => {
+  const { findings } = reconcileListings({
+    inventory: [{ sku: 'SKU-1', status: 'active', quantity: 0, statusChangedAt: SOLD_AT }],
+    listings: [{ platform: 'poshmark', sku: 'SKU-1', status: 'active', lastWrittenAt: '2026-09-18T13:00:00Z' }],
+    now: NOW,
+    defaultSyncWindowMinutes: 60,
+  });
+  assert.strictEqual(findings[0].sourceStatus, 'sold');
+  assert.strictEqual(findings[0].sourceQuantityOverride, 'zero_quantity_still_active');
+  assert.strictEqual(findings[0].classification, 'stale_beyond_window');
+});
+
+test('a positive quantity leaves an available status alone', () => {
+  const { findings } = reconcileListings({
+    inventory: [{ sku: 'SKU-1', status: 'active', quantity: 3, statusChangedAt: SOLD_AT }],
+    listings: [{ platform: 'poshmark', sku: 'SKU-1', status: 'active', lastWrittenAt: SOLD_AT }],
+    now: NOW,
+  });
+  assert.strictEqual(findings[0].classification, 'in_sync');
+  assert.strictEqual(findings[0].sourceQuantity, 3);
+  assert.strictEqual(findings[0].sourceQuantityOverride, null);
+});
+
+test('quantity 0 does not resurrect an already-sold status', () => {
+  const { findings } = reconcileListings({
+    inventory: [{ sku: 'SKU-1', status: 'sold', quantity: 0, statusChangedAt: SOLD_AT }],
+    listings: [{ platform: 'poshmark', sku: 'SKU-1', status: 'sold', lastWrittenAt: SOLD_AT }],
+    now: NOW,
+  });
+  assert.strictEqual(findings[0].classification, 'in_sync');
+  assert.strictEqual(findings[0].sourceQuantityOverride, null);
+});
+
+test('omitting quantity keeps the previous behavior and reports null', () => {
+  const { findings } = reconcileListings({
+    inventory: soldInventory(),
+    listings: [{ platform: 'poshmark', sku: 'SKU-1', status: 'active', lastWrittenAt: '2026-09-18T13:00:00Z' }],
+    now: NOW,
+  });
+  assert.strictEqual(findings[0].sourceQuantity, null);
+  assert.strictEqual(findings[0].sourceQuantityOverride, null);
+});
+
+test('rejects a negative or fractional source quantity', () => {
+  assert.throws(
+    () => reconcileListings({ inventory: [{ sku: 'S', status: 'active', quantity: -1, statusChangedAt: SOLD_AT }], listings: [], now: NOW }),
+    /non-negative integer/
+  );
+  assert.throws(
+    () => reconcileListings({ inventory: [{ sku: 'S', status: 'active', quantity: 1.5, statusChangedAt: SOLD_AT }], listings: [], now: NOW }),
+    /non-negative integer/
+  );
+});
+
+console.log(`\n${passed}/45 passing`);

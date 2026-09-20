@@ -158,10 +158,30 @@ function indexInventory(inventory) {
         'for one sku — deduplicate before reconciling.'
       );
     }
+    let status = canonicalizeStatus(item.status);
+    let quantityOverride = null;
+
+    // A source of truth can report "active" and hold zero units at the same time.
+    // eBay's Out-of-Stock Control does exactly this: at quantity 0 the listing stays
+    // ACTIVE and is merely hidden from search. Trusting the status word alone would
+    // record a sold-out item as available in the one record everything else keys off.
+    // Quantity wins over the status word whenever the two disagree.
+    if (item.quantity !== undefined) {
+      if (!Number.isInteger(item.quantity) || item.quantity < 0) {
+        throw new Error(`inventory["${sku}"].quantity must be a non-negative integer.`);
+      }
+      if (item.quantity === 0 && status === 'available') {
+        status = 'sold';
+        quantityOverride = 'zero_quantity_still_active';
+      }
+    }
+
     bySku.set(sku, {
       sku,
-      status: canonicalizeStatus(item.status),
+      status,
       rawStatus: item.status,
+      quantity: item.quantity === undefined ? null : item.quantity,
+      quantityOverride,
       changedAt: parseTimestamp(item.statusChangedAt, `inventory["${sku}"].statusChangedAt`),
     });
   }
@@ -325,6 +345,8 @@ function reconcileListings(input) {
       listingId: listing.listingId,
       listingStatus: listing.status,
       sourceStatus: source ? source.status : null,
+      sourceQuantity: source ? source.quantity : null,
+      sourceQuantityOverride: source ? source.quantityOverride : null,
       classification,
       severity: CLASSIFICATION_SEVERITY[classification],
       action: CLASSIFICATION_ACTION[classification],

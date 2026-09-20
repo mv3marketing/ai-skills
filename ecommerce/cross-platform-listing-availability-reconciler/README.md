@@ -24,7 +24,7 @@ const { runRootCauseAnalysis } = require('./pipeline.js');
 const { ranked, stageShare } = runRootCauseAnalysis(incidents, { uptimeWindows });
 ```
 
-See `SKILL.md` for the full write-up. Run `node test.js` — 40/40 passing — and
+See `SKILL.md` for the full write-up. Run `node test.js` — 45/45 passing — and
 `node test-pipeline.js` — 31/31 passing.
 
 ## License
