@@ -34,8 +34,10 @@ frequency, which increases the number of reposts.
 |---|---|
 | `availability.js` | `canonicalizeStatus()`, `parseTimestamp()`, `reconcileListings()`, `summarizeByPlatform()`, `buildDelistPlan()` — zero dependencies |
 | `pipeline.js` | `PLATFORM_PROFILES`, `diagnoseIncident()`, `runRootCauseAnalysis()`, `wasScannerUp()` — attributes each stuck listing to a pipeline stage |
+| `storefront.js` | `validateSnapshot()`, `diffSnapshots()`, `confirmDisappearances()`, `reconcileWithLedger()`, `buildStorefrontReport()` — the detector that needs no sale feed |
 | `test.js` | 45-test suite covering status normalization, timezone rejection, all four root-cause classifications, the repost grace window, per-platform cadence, source-quantity overrides, and plan generation |
 | `test-pipeline.js` | 31-test suite covering stage attribution, scanner-uptime logic, cause precedence, and RCA aggregation |
+| `test-storefront.js` | 34-test suite covering snapshot validation, truncated-fetch suppression, confirmation streaks, and ledger reconciliation |
 
 ## How to use it
 
@@ -122,6 +124,57 @@ unlinked listing outranks quantity and offer blocks (the tool cannot delist what
 not know it owns). `runRootCauseAnalysis()` rolls a batch of incidents up into a ranked
 table with each cause's share of the damage.
 
+## Storefront differ (`storefront.js`)
+
+Every marketplace publishes the seller's own shop as a public page. Polling it and
+diffing against the ledger answers the question that actually matters — *is this item
+still live where it shouldn't be?* — with no API, no login, no notification email and no
+cross-listing tool in the path. It is also the only detector that finds **orphans**:
+listings live on a platform that the ledger has no record of, which no sale event will
+ever reference.
+
+```js
+const { buildStorefrontReport } = require('./storefront.js');
+
+const report = buildStorefrontReport({
+  snapshotsByPlatform: {
+    // oldest first; the fetch layer supplies these, this module never does network I/O
+    poshmark: [snapshotA, snapshotB, snapshotC],
+  },
+  ledger,   // [{ sku, status, listings: [{ platform, listingId }] }]
+});
+
+// report.byPlatform.poshmark.saleSignals   -> confirmed disappearances
+// report.byPlatform.poshmark.shouldBeGone  -> ledger says sold, storefront still shows it
+// report.byPlatform.poshmark.orphans       -> live, and the ledger has never heard of it
+// report.byPlatform.poshmark.untrustedPolls-> fetches that were not safe to conclude from
+```
+
+### Why a disappearance is the dangerous event
+
+`shouldBeGone` and `orphans` are presence-based — they are safe to conclude from a partial
+page, because seeing something proves it is there. `saleSignals` are absence-based, and
+acting on them writes to inventory. A storefront fetch that returns a truncated page —
+pagination missed, rate limit, markup change, transient error — makes every unseen item
+look sold. Decrementing stock on that would be exactly the inventory corruption the rest
+of this skill exists to prevent.
+
+So two gates stand in front of every sale signal:
+
+1. **A snapshot must prove itself complete.** The fetch layer must state `complete`
+   explicitly — omitting it is an error, not a default — and a snapshot is additionally
+   distrusted when its item count disagrees with the total the page itself advertised, or
+   when more listings vanished at once than a real sell-through would explain. That last
+   test is a ratio *above an absolute floor*, because a shop holding five listings trips
+   any ratio the moment one sells. An untrusted diff reports **zero** disappearances and
+   says how many it suppressed.
+2. **A disappearance must repeat.** An item must be absent across consecutive trusted
+   snapshots (default 2) before it becomes a sale signal, and an untrusted poll ends the
+   window rather than extending the streak through it. One flaky fetch never moves stock.
+
+Absence is counted from snapshot membership rather than diff events, since an item that
+stays gone produces one disappearance event but many absent snapshots.
+
 ## The two real guardrails
 
 1. **Unknown statuses fail closed.** Every platform has its own vocabulary — `active`,
@@ -167,7 +220,9 @@ so a row disappearing from your feed is not the same as the listing coming down.
 ## Free / paid
 
 Free to download and run yourself. MV3 charges $175/hr only for implementation help
-wiring this into your real platforms' listing export and delist APIs.
+wiring this into your real platforms' listing export and delist APIs, including the fetch
+layer that produces storefront snapshots — which is platform-specific, brittle by nature,
+and should stay gentle and within each marketplace's terms.
 
 `PLATFORM_PROFILES` encodes per-platform detection transport, poll interval, delist
 action, and whether the platform refuses to delete a listing with a live offer. Vendors

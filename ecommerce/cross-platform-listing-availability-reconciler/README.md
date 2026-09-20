@@ -24,8 +24,18 @@ const { runRootCauseAnalysis } = require('./pipeline.js');
 const { ranked, stageShare } = runRootCauseAnalysis(incidents, { uptimeWindows });
 ```
 
-See `SKILL.md` for the full write-up. Run `node test.js` — 45/45 passing — and
-`node test-pipeline.js` — 31/31 passing.
+`storefront.js` is the detector that needs no sale feed: poll your own public shop page on
+each platform, diff it against the ledger, and get confirmed sale signals, listings that
+should already be gone, and orphaned listings the ledger never knew about — with
+truncated-fetch suppression so a partial page is never read as mass sell-through.
+
+```js
+const { buildStorefrontReport } = require('./storefront.js');
+const report = buildStorefrontReport({ snapshotsByPlatform, ledger });
+```
+
+See `SKILL.md` for the full write-up. Run `node test.js` (45/45), `node test-pipeline.js`
+(31/31) and `node test-storefront.js` (34/34).
 
 ## License
 
