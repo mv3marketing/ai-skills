@@ -36,3 +36,15 @@ $f$;
 
 grant execute on function public.vti_poshmark_cleanup() to anon, authenticated;
 notify pgrst, 'reload schema';
+
+-- Hourly fast poll (available view only, ~47s) keeps the differ fed; the full
+-- three-view census runs every six hours, because walking all three takes
+-- ~145s and overran the edge runtime's wall clock on an hourly schedule.
+select cron.schedule('vti-poshmark-census', '35 */6 * * *', $job$
+  select net.http_post(
+    url := 'https://<ref>.supabase.co/functions/v1/poshmark-poller',
+    headers := jsonb_build_object('Content-Type','application/json',
+                                  'Authorization','Bearer <anon key>'),
+    body := '{"full":true}'::jsonb,
+    timeout_milliseconds := 300000);
+$job$);

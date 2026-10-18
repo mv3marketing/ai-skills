@@ -24,7 +24,11 @@ const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const CLOSET = Deno.env.get("POSHMARK_CLOSET") ?? "vintagetoysio";
 const MAX_PAGES = 70;
-const VIEWS = ["", "sold", "not_for_sale"] as const;
+// The available view alone backs the snapshot and runs hourly in ~30s. The sold
+// and not-for-sale views add ~110s, which overran the edge runtime's wall clock
+// on the hourly schedule, so they run on their own slower census ({"full":true}).
+const FAST_VIEWS = [""] as const;
+const FULL_VIEWS = ["", "sold", "not_for_sale"] as const;
 const STATUS: Record<string, string> = {
   available: "available",
   sold_out: "sold",
@@ -83,14 +87,17 @@ async function walk(filter: string) {
   return { filter: filter || "default", pages, total, ended, failure, ok, posts: [...out.values()] };
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   const db = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let full = false;
+  try { full = !!(await req.json())?.full; } catch { /* no body: fast poll */ }
+
   const views = [];
-  for (const v of VIEWS) { try { views.push(await walk(v)); } catch (e) {
+  for (const v of (full ? FULL_VIEWS : FAST_VIEWS)) { try { views.push(await walk(v)); } catch (e) {
     views.push({ filter: v || "default", pages: 0, total: null, ended: false, ok: false,
       failure: `parse_error: ${e instanceof Error ? e.message : String(e)}`, posts: [] });
   } }
@@ -101,11 +108,19 @@ Deno.serve(async () => {
   const classify = (p: any) => STATUS[p?.inventory?.status] ?? "unknown";
   const available = records.filter((p) => classify(p) === "available");
 
-  const bad = views.filter((v) => !v.ok);
-  const complete = bad.length === 0;
-  const reason = bad.length
-    ? bad.map((v) => `${v.filter}:${v.failure ?? (!v.ended ? "pagination_did_not_finish" : "count_disagrees_with_total")}`).join(",")
-    : null;
+  // Only the available view decides completeness, because only it backs the
+  // snapshot the differ reads. The sold view advertises its total on page one
+  // and the closet keeps growing through a 90s walk, so a small disagreement
+  // there is a race, not a truncated read - it must not make the snapshot
+  // untrusted and stall detection.
+  const describe = (v: typeof views[number]) =>
+    `${v.filter}:${v.failure ?? (!v.ended ? "pagination_did_not_finish" : "count_disagrees_with_total")}`;
+  const primary = views.find((v) => v.filter === "default")!;
+  const complete = primary.ok;
+  const others = views.filter((v) => v.filter !== "default" && !v.ok);
+  const reason = !primary.ok
+    ? describe(primary)
+    : (others.length ? "note:" + others.map(describe).join(",") : null);
 
   // Snapshot = the available set, so the differ's semantics are unchanged.
   const { data: snap, error: snapErr } = await db.schema("vti").from("snapshots")
@@ -144,7 +159,7 @@ Deno.serve(async () => {
   for (const p of records) counts[classify(p)] = (counts[classify(p)] ?? 0) + 1;
 
   return new Response(JSON.stringify({
-    snapshot_id: snap.id, complete, untrusted_reason: reason,
+    snapshot_id: snap.id, mode: full ? "census" : "fast", complete, untrusted_reason: reason,
     views: views.map(({ filter, pages, total, ok, failure, posts }) =>
       ({ filter, pages, advertised_total: total, fetched: posts.length, ok, failure })),
     union_total: records.length, by_status: counts,
